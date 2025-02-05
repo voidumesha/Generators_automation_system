@@ -1,0 +1,167 @@
+Ultra:
+
+VCC → 5V
+GND → GND
+TRIG → Pin 9
+ECHO → Pin 10
+
+
+
+RTC:
+
+VCC	Power supply (3.3V or 5V)	Required
+GND	Ground	Required
+SDA	I2C data line (connects to Mega pin 20)	Required
+SCL	I2C clock line (connects to Mega pin 21)
+
+
+
+5-Channel Flame Sensor Module:
+
+VCC	5V
+GND	GND
+A1	A0
+A2	A1
+A3	A2
+A4	A3
+A5	A4
+D1	30
+D2	31
+D3	32
+D4	33
+D5	34
+
+
+
+
+
+
+RTC work perfectly:
+
+output,
+
+2025/2/6 3:18:25
+2025/2/6 3:18:26
+2025/2/6 3:18:27
+2025/2/6 3:18:28
+2025/2/6 3:18:29
+2025/2/6 3:18:30
+2025/2/6 3:18:31
+2025/2/6 3:18:32
+2025/2/6 3:18:3
+
+
+Ultrasonic work perfectly:
+
+output,
+Distance: 802.48 cm
+Distance: 4.61 cm
+Distance: 7.44 cm
+Distance: 6.89 cm
+Distance: 5.49 cm
+Distance: 4.94 cm
+Distance: 802.45 cm
+Distance: 802.48 cm
+Distance: 802.45 cm
+
+
+RTC work perfectly:
+
+output,
+
+2025/2/6 3:18:25
+2025/2/6 3:18:26
+2025/2/6 3:18:27
+2025/2/6 3:18:28
+2025/2/6 3:18:29
+2025/2/6 3:18:30
+2025/2/6 3:18:31
+2025/2/6 3:18:32
+2025/2/6 3:18:3
+
+
+Flame Sensor working perfect:
+output,
+
+
+=== Flame Sensor Readings ===
+D1: 🔥 Fire!  A1: 16
+D2: 🔥 Fire!  A2: 18
+D3: 🔥 Fire!  A3: 111
+D4: 🔥 Fire!  A4: 256
+D5: 🔥 Fire!  A5: 221
+=============================
+=== Flame Sensor Readings ===
+D1: 🔥 Fire!  A1: 0
+D2: 🔥 Fire!  A2: 0
+D3: 🔥 Fire!  A3: 0
+D4: 🔥 Fire!  A4: 0
+D5: 🔥 Fire!  A5: 1
+=============================
+=== Flame Sensor Readings ===
+D1: 🔥 Fire!  A1: 1
+D2: 🔥 Fire!  A2: 1
+D3: 🔥 Fire!  A3: 63
+D4: 🔥 Fire!  A4: 446
+D5: 🔥 Fire!  A5: 111
+
+
+
+
+
+SIM800L work perfectly:
+output,
+
+Sending SMS...
+SMS Sent!
+
+and got the msg
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
