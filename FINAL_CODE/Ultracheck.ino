@@ -15,12 +15,6 @@
 #define FLAME_D4 33
 #define FLAME_D5 34
 
-#define FLAME_A1 A0
-#define FLAME_A2 A1
-#define FLAME_A3 A2
-#define FLAME_A4 A3
-#define FLAME_A5 A4
-
 // === Generator ON/OFF Button ===
 #define GEN_BUTTON 40
 
@@ -73,13 +67,30 @@ void setup()
   pinMode(DISPLAY_BUTTON, INPUT_PULLUP);
 
   if (!rtc.begin())
-    Serial.println("RTC failed!");
+  {
+    Serial.println("RTC module failed!");
+  }
+  else
+  {
+    if (rtc.lostPower())
+    {
+      Serial.println("RTC lost power, setting current time...");
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Set to compile time
+    }
+  }
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
-    Serial.println("OLED failed!");
+  {
+    Serial.println("OLED initialization failed!");
+  }
+  else
+  {
+    Serial.println("OLED display initialized.");
+  }
 
   displayMessage("System Ready!", "");
   sendSMS("Generator Monitoring System Started!");
+  Serial.println("System Ready! Monitoring Started...");
 }
 
 void loop()
@@ -112,6 +123,9 @@ float getFuelLevel()
 void checkFuelLevel()
 {
   float fuelPercentage = getFuelLevel();
+  Serial.print("Fuel Level: ");
+  Serial.print(fuelPercentage);
+  Serial.println("%");
 
   if (fuelPercentage != previousFuelLevel)
   {
@@ -120,6 +134,9 @@ void checkFuelLevel()
       if (fuelPercentage <= FUEL_THRESHOLDS[i])
       {
         sendSMS("Fuel Level: " + String(FUEL_THRESHOLDS[i]) + "%");
+        Serial.print("Sent SMS: Fuel Level ");
+        Serial.print(FUEL_THRESHOLDS[i]);
+        Serial.println("%");
         break;
       }
     }
@@ -133,6 +150,7 @@ void checkFlameSensor()
   if (!digitalRead(FLAME_D1) || !digitalRead(FLAME_D2) || !digitalRead(FLAME_D3) || !digitalRead(FLAME_D4) || !digitalRead(FLAME_D5))
   {
     sendSMS("Near the bottle fire detected!");
+    Serial.println("WARNING: Fire Detected Near Bottle!");
   }
 }
 
@@ -146,6 +164,7 @@ void checkGeneratorStatus()
     generatorRunning = true;
     generatorStartTime = millis();
     sendSMS("Generator Turned ON!");
+    Serial.println("Generator Turned ON!");
   }
 
   if (!genState && generatorRunning)
@@ -154,6 +173,9 @@ void checkGeneratorStatus()
     unsigned long runTime = (millis() - generatorStartTime) / 3600000.0;
     float expectedConsumption = runTime * CONSUMPTION_RATE;
     sendSMS("Generator OFF! Fuel Used: " + String(expectedConsumption) + "ml");
+    Serial.print("Generator OFF! Fuel Used: ");
+    Serial.print(expectedConsumption);
+    Serial.println("ml");
   }
 }
 
@@ -163,6 +185,7 @@ void checkLidStatus()
   if (digitalRead(LID_BUTTON) == LOW)
   {
     sendSMS("WARNING: Fuel Tank Lid Opened!");
+    Serial.println("ALERT: Fuel Tank Lid Opened!");
   }
 }
 
@@ -172,6 +195,7 @@ void checkScheduledFuelReport()
   DateTime now = rtc.now();
   if ((now.hour() == 8 || now.hour() == 17) && now.minute() == 0)
   {
+    Serial.println("Scheduled Fuel Report Sent.");
     checkFuelLevel();
   }
 }
@@ -199,11 +223,11 @@ void updateDisplay()
 void displayMessage(String top, String bottom)
 {
   display.clearDisplay();
-  display.setTextSize(1);
+  display.setTextSize(2); // Increased text size
   display.setTextColor(WHITE);
   display.setCursor(10, 10);
   display.println(top);
-  display.setCursor(10, 30);
+  display.setCursor(10, 40);
   display.println(bottom);
   display.display();
 }
@@ -211,6 +235,9 @@ void displayMessage(String top, String bottom)
 // === Function to Send SMS ===
 void sendSMS(String message)
 {
+  Serial.print("Sending SMS: ");
+  Serial.println(message);
+
   sim800l.println("AT+CMGF=1");
   delay(100);
   sim800l.println("AT+CMGS=\"+94763005528\"");
@@ -218,5 +245,5 @@ void sendSMS(String message)
   sim800l.print(message);
   delay(100);
   sim800l.write(26);
-    delay(3000);
+  delay(3000);
 }
