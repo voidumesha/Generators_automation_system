@@ -14,6 +14,7 @@
 #define FLAME_D3 32
 #define FLAME_D4 33
 #define FLAME_D5 34
+#define FLAME_ANALOG A0 // Using Analog input for better accuracy
 
 // === Generator ON/OFF Button ===
 #define GEN_BUTTON 40
@@ -21,8 +22,11 @@
 // === Fuel Tank Lid Push Button ===
 #define LID_BUTTON 41
 
-// === Manual Display Push Button ===
-#define DISPLAY_BUTTON 42
+// === Manual Display Toggle Button ===
+#define DISPLAY_BUTTON 43
+
+// === Generator On/Off Switch ===
+#define GEN_SWITCH 44
 
 // === OLED Display ===
 #define SCREEN_WIDTH 128
@@ -38,14 +42,15 @@ RTC_DS3231 rtc;
 SoftwareSerial sim800l(SIM_TX, SIM_RX);
 
 // === Constants ===
-const int MAX_FUEL_LEVEL_CM = 15; // 2L bottle = 15cm
-const int FULL_FUEL_PERCENTAGE = 100;
-const int FUEL_THRESHOLDS[] = {100, 75, 50, 25, 0}; // % levels for messages
-const float CONSUMPTION_RATE = 200.0;               // 200ml per hour
+const float MAX_FUEL_LEVEL_CM = 15.0;
+const float MAX_FUEL_VOLUME_ML = 1500.0;
+const float CONSUMPTION_RATE = 200.0;
 
-float previousFuelLevel = 100.0;
+float previousFuelLevel = MAX_FUEL_VOLUME_ML;
 unsigned long generatorStartTime = 0;
 bool generatorRunning = false;
+bool displayMode = false;
+bool fireDetected = false;
 
 void setup()
 {
@@ -61,42 +66,43 @@ void setup()
   pinMode(FLAME_D3, INPUT);
   pinMode(FLAME_D4, INPUT);
   pinMode(FLAME_D5, INPUT);
+  pinMode(FLAME_ANALOG, INPUT);
 
   pinMode(GEN_BUTTON, INPUT_PULLUP);
   pinMode(LID_BUTTON, INPUT_PULLUP);
   pinMode(DISPLAY_BUTTON, INPUT_PULLUP);
+  pinMode(GEN_SWITCH, INPUT_PULLUP);
+
+  Serial.println("✅ System Initializing...");
 
   if (!rtc.begin())
   {
-    Serial.println("RTC module failed!");
+    Serial.println("❌ RTC module failed!");
   }
   else
   {
     if (rtc.lostPower())
     {
-      Serial.println("RTC lost power, setting current time...");
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Set to compile time
+      Serial.println("⚠ RTC lost power, setting current time...");
+      rtc.adjust(DateTime(_DATE, __TIME_));
     }
   }
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
-    Serial.println("OLED initialization failed!");
-  }
-  else
-  {
-    Serial.println("OLED display initialized.");
+    Serial.println("❌ OLED initialization failed!");
   }
 
+  Serial.println("✅ System Ready!");
   displayMessage("System Ready!", "");
   sendSMS("Generator Monitoring System Started!");
-  Serial.println("System Ready! Monitoring Started...");
 }
 
 void loop()
 {
+  checkDisplayButton();
   updateDisplay();
-  checkFuelLevel();
+  checkFuelLevel(); // ✅ Now the function is properly defined!
   checkFlameSensor();
   checkGeneratorStatus();
   checkLidStatus();
@@ -104,126 +110,42 @@ void loop()
   delay(1000);
 }
 
-// === Function to Measure Fuel Level ===
-float getFuelLevel()
+// === Function to Toggle OLED Display Mode ===
+void checkDisplayButton()
 {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH);
-  float distanceCM = (duration * 0.0343) / 2;
-
-  float fuelPercentage = ((MAX_FUEL_LEVEL_CM - distanceCM) / MAX_FUEL_LEVEL_CM) * 100.0;
-  return fuelPercentage >= 0 ? fuelPercentage : 0;
-}
-
-void checkFuelLevel()
-{
-  float fuelPercentage = getFuelLevel();
-  Serial.print("Fuel Level: ");
-  Serial.print(fuelPercentage);
-  Serial.println("%");
-
-  if (fuelPercentage != previousFuelLevel)
+  if (digitalRead(DISPLAY_BUTTON) == LOW)
   {
-    for (int i = 0; i < 5; i++)
-    {
-      if (fuelPercentage <= FUEL_THRESHOLDS[i])
-      {
-        sendSMS("Fuel Level: " + String(FUEL_THRESHOLDS[i]) + "%");
-        Serial.print("Sent SMS: Fuel Level ");
-        Serial.print(FUEL_THRESHOLDS[i]);
-        Serial.println("%");
-        break;
-      }
-    }
-    previousFuelLevel = fuelPercentage;
+    displayMode = !displayMode;
+    Serial.println("📟 Display mode changed.");
+    delay(500);
   }
 }
 
-// === Function to Detect Fire ===
-void checkFlameSensor()
-{
-  if (!digitalRead(FLAME_D1) || !digitalRead(FLAME_D2) || !digitalRead(FLAME_D3) || !digitalRead(FLAME_D4) || !digitalRead(FLAME_D5))
-  {
-    sendSMS("Near the bottle fire detected!");
-    Serial.println("WARNING: Fire Detected Near Bottle!");
-  }
-}
-
-// === Function to Detect Generator ON/OFF ===
-void checkGeneratorStatus()
-{
-  bool genState = !digitalRead(GEN_BUTTON);
-
-  if (genState && !generatorRunning)
-  {
-    generatorRunning = true;
-    generatorStartTime = millis();
-    sendSMS("Generator Turned ON!");
-    Serial.println("Generator Turned ON!");
-  }
-
-  if (!genState && generatorRunning)
-  {
-    generatorRunning = false;
-    unsigned long runTime = (millis() - generatorStartTime) / 3600000.0;
-    float expectedConsumption = runTime * CONSUMPTION_RATE;
-    sendSMS("Generator OFF! Fuel Used: " + String(expectedConsumption) + "ml");
-    Serial.print("Generator OFF! Fuel Used: ");
-    Serial.print(expectedConsumption);
-    Serial.println("ml");
-  }
-}
-
-// === Function to Detect Fuel Theft (Lid Opened) ===
-void checkLidStatus()
-{
-  if (digitalRead(LID_BUTTON) == LOW)
-  {
-    sendSMS("WARNING: Fuel Tank Lid Opened!");
-    Serial.println("ALERT: Fuel Tank Lid Opened!");
-  }
-}
-
-// === Function to Send Fuel Level at 8AM and 5PM ===
-void checkScheduledFuelReport()
-{
-  DateTime now = rtc.now();
-  if ((now.hour() == 8 || now.hour() == 17) && now.minute() == 0)
-  {
-    Serial.println("Scheduled Fuel Report Sent.");
-    checkFuelLevel();
-  }
-}
-
-// === OLED Display Update ===
+// === Function to Update OLED Display ===
 void updateDisplay()
 {
   DateTime now = rtc.now();
-  String dateStr = String(now.year()) + "/" + String(now.month()) + "/" + String(now.day());
-  String timeStr = String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second());
-
-  if (digitalRead(DISPLAY_BUTTON) == LOW)
+  if (!displayMode)
   {
-    float fuelPercentage = getFuelLevel();
-    String fuelStatus = "Fuel: " + String(fuelPercentage) + "%";
-    String genStatus = generatorRunning ? "Generator: ON" : "Generator: OFF";
-    displayMessage(fuelStatus, genStatus);
+    String dateStr = String(now.year()) + "/" + String(now.month()) + "/" + String(now.day());
+    String timeStr = String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second());
+    displayMessage(dateStr, timeStr);
   }
   else
   {
-    displayMessage(dateStr, timeStr);
+    float fuelVolumeML = getFuelLevel();
+    bool genStatus = !digitalRead(GEN_SWITCH);
+    String fuelStatus = "Fuel: " + String(fuelVolumeML) + "mL";
+    String genState = genStatus ? "Gen: ON" : "Gen: OFF";
+    displayMessage(fuelStatus, genState);
   }
 }
 
+// === Function to Display Message on OLED ===
 void displayMessage(String top, String bottom)
 {
   display.clearDisplay();
-  display.setTextSize(2); // Increased text size
+  display.setTextSize(2);
   display.setTextColor(WHITE);
   display.setCursor(10, 10);
   display.println(top);
@@ -232,10 +154,112 @@ void displayMessage(String top, String bottom)
   display.display();
 }
 
+// === Function to Measure Fuel Level ===
+void checkFuelLevel()
+{
+  float fuelVolumeML = getFuelLevel();
+  Serial.print("📊 Fuel Level: ");
+  Serial.print(fuelVolumeML);
+  Serial.println(" mL");
+
+  if (fuelVolumeML != previousFuelLevel)
+  {
+    sendSMS("Fuel Level: " + String(fuelVolumeML) + "mL");
+    previousFuelLevel = fuelVolumeML;
+  }
+}
+
+// === Function to Get Fuel Level from Ultrasonic Sensor ===
+float getFuelLevel()
+{
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  if (duration == 0)
+  {
+    Serial.println("⚠ Ultrasonic Sensor Timeout! Check connections.");
+    return previousFuelLevel;
+  }
+
+  float distanceCM = (duration * 0.0343) / 2;
+  float fuelVolumeML = ((MAX_FUEL_LEVEL_CM - distanceCM) / MAX_FUEL_LEVEL_CM) * MAX_FUEL_VOLUME_ML;
+  return fuelVolumeML >= 0 ? fuelVolumeML : 0;
+}
+
+// === Function to Detect Fire ===
+void checkFlameSensor()
+{
+  int flameValue = analogRead(FLAME_ANALOG);
+  Serial.print("🔥 Flame Sensor Value: ");
+  Serial.println(flameValue);
+
+  if (flameValue < 500 && !fireDetected)
+  {
+    Serial.println("🔥 Fire detected near the generator!");
+    sendSMS("Fire detected near the bottle!");
+    fireDetected = true;
+  }
+  else if (flameValue >= 500)
+  {
+    fireDetected = false;
+  }
+}
+
+// === Function to Check Generator ON/OFF Status ===
+void checkGeneratorStatus()
+{
+  bool genState = !digitalRead(GEN_BUTTON);
+
+  if (genState && !generatorRunning)
+  {
+    generatorRunning = true;
+    generatorStartTime = millis();
+    Serial.println("✅ Generator Turned ON!");
+    sendSMS("Generator Turned ON!");
+    sendSMS("Generator Powered!");
+  }
+
+  if (!genState && generatorRunning)
+  {
+    generatorRunning = false;
+    unsigned long runTime = (millis() - generatorStartTime) / 3600000.0;
+    float expectedConsumption = runTime * CONSUMPTION_RATE;
+    Serial.print("❌ Generator Turned OFF! Fuel Used: ");
+    Serial.print(expectedConsumption);
+    Serial.println(" mL");
+    sendSMS("Generator OFF! Fuel Used: " + String(expectedConsumption) + "mL");
+  }
+}
+
+// === Function to Detect Fuel Theft ===
+void checkLidStatus()
+{
+  if (digitalRead(LID_BUTTON) == LOW)
+  {
+    Serial.println("⚠ WARNING: Fuel Tank Lid Opened!");
+    sendSMS("WARNING: Fuel Tank Lid Opened!");
+  }
+}
+
+// === Function to Send Scheduled Fuel Reports ===
+void checkScheduledFuelReport()
+{
+  DateTime now = rtc.now();
+  if ((now.hour() == 8 || now.hour() == 17) && now.minute() == 0)
+  {
+    Serial.println("📅 Sending Scheduled Fuel Report...");
+    checkFuelLevel();
+  }
+}
+
 // === Function to Send SMS ===
 void sendSMS(String message)
 {
-  Serial.print("Sending SMS: ");
+  Serial.print("📩 Sending SMS: ");
   Serial.println(message);
 
   sim800l.println("AT+CMGF=1");
@@ -245,5 +269,5 @@ void sendSMS(String message)
   sim800l.print(message);
   delay(100);
   sim800l.write(26);
-  delay(3000);
+    delay(3000);
 }
